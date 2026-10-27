@@ -14,6 +14,7 @@ wr = players[players["nfl_position"] == "WR"]
 wr = wr.merge(player_accol, how="left", on="nfl_id").merge(combine.drop(columns="draft_year"), how="left", on="nfl_id")
 wr_ids = wr["nfl_id"]
 
+'''
 # WR combine tracking data
 combine_t = pd.read_csv(f"{path}combine_tracking.csv")
 wr_combine_t = combine_t[combine_t["nfl_id"].isin(wr_ids)]
@@ -30,8 +31,17 @@ wr_plays = games[games["season_type"] == "REG"].merge(wr_plays, on="game_id", ho
 game_ids = wr_plays["game_id"].unique()
 wr_plays_t = pd.concat([track[track["game_id"].isin(game_ids) & track["nfl_id"].isin(wr_ids)]
      for track in (games_t_23, games_t_24, games_t_25)], ignore_index=True)
-
+'''
+     
 # wr = WR descriptive data such as measurables, combine measurements, accolades, ngs scores
 # wr_combine_t = combine tracking for each WR
 # wr_plays = regular season only play level data with game and play result information
 # wr_plays_t = all tracking frames from plays from last three regular seasons stacked only for WRs
+
+
+
+# NGS SCORES (PRODUCTION VS ATHELTIC) AND DRAFT PICK POSITION
+wr = wr.rename(columns={"ngs_athleticism_score":"ngs_ath", "ngs_college_production_score":"ngs_prod"})
+wr["undrafted"] = wr["draft_overall_pick"].isna().astype(int)
+wr["pick_adj"] = wr["draft_overall_pick"].fillna(wr["draft_overall_pick"].max()+1)
+print(wr)
