@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy.stats import linregress
+import statsmodels.formula.api as smf
 
 path = "data/"
 
@@ -43,5 +44,30 @@ wr_plays_t = pd.concat([track[track["game_id"].isin(game_ids) & track["nfl_id"].
 # NGS SCORES (PRODUCTION VS ATHELTIC) AND DRAFT PICK POSITION
 wr = wr.rename(columns={"ngs_athleticism_score":"ngs_ath", "ngs_college_production_score":"ngs_prod"})
 wr["undrafted"] = wr["draft_overall_pick"].isna().astype(int)
-wr["pick_adj"] = wr["draft_overall_pick"].fillna(wr["draft_overall_pick"].max()+1)
-print(wr)
+wr["pick_adj"] = wr["draft_overall_pick"].fillna(players["draft_overall_pick"].max()+1)
+wr["pick_log"] = np.log(wr["pick_adj"])
+# print(wr[["ngs_ath", "ngs_prod"]].describe())
+ath_mean = round(wr["ngs_ath"].mean(), 3)
+ath_med = round(wr["ngs_ath"].median(), 3)
+ath_sd = round(wr["ngs_ath"].std(), 3)
+prod_mean = round(wr["ngs_prod"].mean(), 3)
+prod_med = round(wr["ngs_prod"].median(), 3)
+prod_sd = round(wr["ngs_prod"].std(), 3)
+# print(ath_mean, ath_med, ath_sd, prod_mean, prod_med, prod_sd)
+# 73.651 | 75.0 | 11.155 | 68.113 | 68.0 | 8.267
+wr["z_ath"] = round(((wr["ngs_ath"] - ath_mean) / ath_sd), 3)
+wr["z_prod"] = round(((wr["ngs_prod"] - prod_mean) / prod_sd), 3)
+
+high_ath = wr["z_ath"] > 0
+high_prod = wr["z_prod"] > 0
+wr["profile"] = np.select([high_ath & high_prod, high_ath & ~high_prod, ~high_ath & high_prod], ["Both", "Athlete", "Producer"], default="Neither")
+# print(wr["profile"].value_counts())
+profile_draft = (wr.groupby("profile").agg(Players=("nfl_id", "count"),
+         Avg_Pick=("pick_adj", "mean"),
+         Med_Pick=("pick_adj", "median"),
+         Avg_Pick_Drafted=("draft_overall_pick", "mean"),
+         UDFA_Rate=("undrafted", "mean"))
+    .sort_values("Avg_Pick")
+    .round(3))
+print(profile_draft)
+# wr.to_csv(f"{path}wr_zscores.csv")
