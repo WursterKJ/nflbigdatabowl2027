@@ -77,57 +77,72 @@ model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
 
 
 
-
-
-
-# create outcome/performance focused variables and join to wr dataframe
+# create outcome/performance variables for WRs
+# combine performance outcomes with draft position for player profiles
+# aggregate per route/target metrics two different ways: (example for epa per route run)
+     # sum all profiled players epa's then divide by total routes ran for all players in profile
+     # create metrics on individual level, then average across profiles (epa per route run for each player, then average)
 plays = pd.read_csv(f"{path}player_play.csv")
 games = pd.read_csv(f"{path}games.csv")
-wr_plays = plays[(plays["nfl_id"].isin(wr_ids)) & (plays["play_nullified_by_penalty"] == "N")]
+wr_plays = plays[plays["nfl_id"].isin(wr_ids) & (plays["play_nullified_by_penalty"] == "N")]
 wr_plays = games[games["season_type"] == "REG"].merge(wr_plays, on="game_id", how="inner")
 wr_plays["yac_over_expected"] = wr_plays["yards_after_catch"] - wr_plays["expected_yards_after_catch"]
+wr_plays[["rec_yards", "yac_over_expected", "expected_points_added"]] = wr_plays[["rec_yards", "yac_over_expected", "expected_points_added"]].fillna(0)
+wr_plays = wr_plays.merge(wr[["nfl_id", "profile"]], on="nfl_id", how="left")
+wr_targeted = wr_plays[wr_plays["target"] == True]
 
-# WR LEVEL
-# wr_snaps_acc = wr["career_offensive_snaps", "career_games_active", "career_games_started", "ap_all_pro_1st_team", "ap_all_pro_2nd_team", "pro_bowl_original_ballot"]
-wr_routes = wr_plays.groupby("nfl_id", as_index=False).agg(
-     routes=("play_id", "count"), epa_route=("expected_points_added", "mean"),
-     yprr=("rec_yards", "mean"), yac_over_exp_route=("yac_over_expected", "mean"), 
-     sep_route=("separation_at_pass_forward", "mean")
-     )
-wr_targets = wr_plays[wr_plays["target"]].groupby("nfl_id", as_index=False).agg(
-     targets=("play_id", "count"), epa_target=("expected_points_added", "mean"), 
-     ypt=("rec_yards", "mean"), yac_over_exp_target=("yac_over_expected", "mean"), 
-     sep_target=("separation_at_pass_forward", "mean")
-     )
-wr_perform = wr.merge(wr_routes, on="nfl_id", how="left").merge(wr_targets, on="nfl_id", how="left")
-# wr_perform.to_csv(f"{path}wr_perform.csv")
+# first aggregation, profile level (pool all plays by profile first, then make metrics)
+wr_profile_draft = wr.groupby("profile").agg(
+    Avg_Pick=("pick_adj", "mean"),
+    Med_Pick=("pick_adj", "median"),
+    Avg_Pick_Drafted=("draft_overall_pick", "mean"),
+    UDFA_Rate=("undrafted", "mean"),
+    Snaps=("career_offensive_snaps", "sum"),
+    Games_Started=("career_games_started", "sum"),
+    AllPro_First=("ap_all_pro_1st_team", "sum"),
+    AllPro_Second=("ap_all_pro_2nd_team", "sum"),
+    Pro_Bowl=("pro_bowl_original_ballot", "sum"))
+wr_profile_routes = wr_plays.groupby("profile").agg(
+    routes=("play_id", "count"),
+    epa_route=("expected_points_added", "mean"),
+    yprr=("rec_yards", "mean"),
+    yac_over_exp_route=("yac_over_expected", "mean"))
+wr_profile_targets = wr_targeted.groupby("profile").agg(
+    targets=("play_id", "count"),
+    epa_target=("expected_points_added", "mean"),
+    ypt=("rec_yards", "mean"),
+    yac_over_exp_target=("yac_over_expected", "mean"))
+wr_pooled = wr_profile_draft.join(wr_profile_routes).join(wr_profile_targets).sort_values("Avg_Pick")
+wr_pooled["aggregation"] = "profile"
 
-# WR PROFILE LEVEL
-wr_profiles = wr[["nfl_id","profile"]]
-wr_plays = wr_plays.merge(wr_profiles, on="nfl_id", how="left")
-wr_profiles = wr.groupby("profile", as_index=False).agg(
-     Avg_Pick=("pick_adj", "mean"),
-     Med_Pick=("pick_adj", "median"),
-     Avg_Pick_Drafted=("draft_overall_pick", "mean"),
-     UDFA_Rate=("undrafted", "mean"), 
-     Snaps=("career_offensive_snaps", "sum"), 
-     Games_Started=("career_games_started", "sum"),
-     AllPro_First=("ap_all_pro_1st_team", "sum"),
-     AllPro_Second=("ap_all_pro_2nd_team", "sum"),
-     Pro_Bowl=("pro_bowl_original_ballot", "sum")
-     )
-wr_routes = wr_plays.groupby("profile", as_index=False).agg(
-     routes=("play_id", "count"), epa_route=("expected_points_added", "mean"),
-     yprr=("rec_yards", "mean"), yac_over_exp_route=("yac_over_expected", "mean")
-     )
-wr_targets = wr_plays[wr_plays["target"]].groupby("profile", as_index=False).agg(
-     targets=("play_id", "count"), epa_target=("expected_points_added", "mean"), 
-     ypt=("rec_yards", "mean"), yac_over_exp_target=("yac_over_expected", "mean")
-     )
+# second aggregation, player level (average players metrics by profile)
+wr_player_routes = wr_plays.groupby("nfl_id").agg(
+    routes=("play_id", "count"),
+    epa_route=("expected_points_added", "mean"),
+    yprr=("rec_yards", "mean"),
+    yac_over_exp_route=("yac_over_expected", "mean"))
+wr_player_targets = wr_targeted.groupby("nfl_id").agg(
+    targets=("play_id", "count"),
+    epa_target=("expected_points_added", "mean"),
+    ypt=("rec_yards", "mean"),
+    yac_over_exp_target=("yac_over_expected", "mean"))
+wr_player = (wr_player_routes.join(wr_player_targets).join(wr.set_index("nfl_id")["profile"]))
+wr_player_avg = wr_player.groupby("profile").agg(
+    routes=("routes", "sum"),
+    epa_route=("epa_route", "mean"),
+    yprr=("yprr", "mean"),
+    yac_over_exp_route=("yac_over_exp_route", "mean"),
+    targets=("targets", "sum"),
+    epa_target=("epa_target", "mean"),
+    ypt=("ypt", "mean"),
+    yac_over_exp_target=("yac_over_exp_target", "mean"))
+wr_player_avg["aggregation"] = "player"
+pick_cols = ["Avg_Pick", "Med_Pick", "Avg_Pick_Drafted", "UDFA_Rate", "Snaps", "Games_Started", "AllPro_First", "AllPro_Second", "Pro_Bowl"]
+wr_player_avg = wr_player_avg.join(wr_profile_draft[pick_cols]).loc[wr_pooled.index]
+wr_player_avg["aggregation"] = "player avg"
 
-wr_profile_perform = wr_profiles.merge(wr_routes, how="left", on="profile").merge(wr_targets, how="left", on="profile").sort_values("Avg_Pick").round(3)
-print(wr_profile_perform)
-wr_profile_perform.to_csv(f"{path}wr_profile_perform.csv")
-
-
-
+wr_profile_perform = pd.concat([wr_pooled, wr_player_avg]).reset_index()
+first_cols = ["aggregation", "profile"]
+wr_profile_perform = wr_profile_perform[first_cols + [c for c in wr_pooled.columns if c not in first_cols]].round(3)
+print(wr_profile_perform.to_string(index=False))
+wr_profile_perform.to_csv(f"{path}wr_profile_perform.csv", index=False)
