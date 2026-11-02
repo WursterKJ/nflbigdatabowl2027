@@ -62,12 +62,24 @@ high_ath = wr["z_ath"] > 0
 high_prod = wr["z_prod"] > 0
 wr["profile"] = np.select([high_ath & high_prod, high_ath & ~high_prod, ~high_ath & high_prod], ["Both", "Athlete", "Producer"], default="Neither")
 # print(wr["profile"].value_counts())
-profile_draft = (wr.groupby("profile").agg(Players=("nfl_id", "count"),
-         Avg_Pick=("pick_adj", "mean"),
-         Med_Pick=("pick_adj", "median"),
-         Avg_Pick_Drafted=("draft_overall_pick", "mean"),
-         UDFA_Rate=("undrafted", "mean"))
-    .sort_values("Avg_Pick")
-    .round(3))
-print(profile_draft)
+drafted = wr[wr["undrafted"]==False]
+for pool in [wr, drafted]:
+     profile_draft = (pool.groupby("profile").agg(Players=("nfl_id", "count"),
+          Avg_Pick=("pick_adj", "mean"),
+          Med_Pick=("pick_adj", "median"),
+          Avg_Pick_Drafted=("draft_overall_pick", "mean"),
+          UDFA_Rate=("undrafted", "mean"))
+         .sort_values("Avg_Pick")
+         .round(3))
+     print(profile_draft)
 # wr.to_csv(f"{path}wr_zscores.csv")
+
+# modeling for hook, find marginal changes in score to draft pick
+model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
+print(model.summary())
+print(model.t_test("z_ath - z_prod = 0"))
+
+
+
+
+
