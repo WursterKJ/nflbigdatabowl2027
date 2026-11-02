@@ -21,14 +21,10 @@ combine_t = pd.read_csv(f"{path}combine_tracking.csv")
 wr_combine_t = combine_t[combine_t["nfl_id"].isin(wr_ids)]
 
 # WR game tracking data
-plays = pd.read_csv(f"{path}player_play.csv")
-games = pd.read_csv(f"{path}games.csv")
 games_t_23 = pd.read_csv(f"{path}game_tracking_2023.csv")
 games_t_24 = pd.read_csv(f"{path}game_tracking_2024.csv")
 games_t_25 = pd.read_csv(f"{path}game_tracking_2025.csv")
 
-wr_plays = plays[plays["nfl_id"].isin(wr_ids)]
-wr_plays = games[games["season_type"] == "REG"].merge(wr_plays, on="game_id", how="inner")
 game_ids = wr_plays["game_id"].unique()
 wr_plays_t = pd.concat([track[track["game_id"].isin(game_ids) & track["nfl_id"].isin(wr_ids)]
      for track in (games_t_23, games_t_24, games_t_25)], ignore_index=True)
@@ -71,15 +67,67 @@ for pool in [wr, drafted]:
           UDFA_Rate=("undrafted", "mean"))
          .sort_values("Avg_Pick")
          .round(3))
-     print(profile_draft)
+#     print(profile_draft)
 # wr.to_csv(f"{path}wr_zscores.csv")
 
 # modeling for hook, find marginal changes in score to draft pick
 model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
-print(model.summary())
-print(model.t_test("z_ath - z_prod = 0"))
+# print(model.summary())
+# print(model.t_test("z_ath - z_prod = 0"))
 
 
+
+
+
+
+# create outcome/performance focused variables and join to wr dataframe
+plays = pd.read_csv(f"{path}player_play.csv")
+games = pd.read_csv(f"{path}games.csv")
+wr_plays = plays[(plays["nfl_id"].isin(wr_ids)) & (plays["play_nullified_by_penalty"] == "N")]
+wr_plays = games[games["season_type"] == "REG"].merge(wr_plays, on="game_id", how="inner")
+wr_plays["yac_over_expected"] = wr_plays["yards_after_catch"] - wr_plays["expected_yards_after_catch"]
+
+# WR LEVEL
+# wr_snaps_acc = wr["career_offensive_snaps", "career_games_active", "career_games_started", "ap_all_pro_1st_team", "ap_all_pro_2nd_team", "pro_bowl_original_ballot"]
+wr_routes = wr_plays.groupby("nfl_id", as_index=False).agg(
+     routes=("play_id", "count"), epa_route=("expected_points_added", "mean"),
+     yprr=("rec_yards", "mean"), yac_over_exp_route=("yac_over_expected", "mean"), 
+     sep_route=("separation_at_pass_forward", "mean")
+     )
+wr_targets = wr_plays[wr_plays["target"]].groupby("nfl_id", as_index=False).agg(
+     targets=("play_id", "count"), epa_target=("expected_points_added", "mean"), 
+     ypt=("rec_yards", "mean"), yac_over_exp_target=("yac_over_expected", "mean"), 
+     sep_target=("separation_at_pass_forward", "mean")
+     )
+wr_perform = wr.merge(wr_routes, on="nfl_id", how="left").merge(wr_targets, on="nfl_id", how="left")
+# wr_perform.to_csv(f"{path}wr_perform.csv")
+
+# WR PROFILE LEVEL
+wr_profiles = wr[["nfl_id","profile"]]
+wr_plays = wr_plays.merge(wr_profiles, on="nfl_id", how="left")
+wr_profiles = wr.groupby("profile", as_index=False).agg(
+     Avg_Pick=("pick_adj", "mean"),
+     Med_Pick=("pick_adj", "median"),
+     Avg_Pick_Drafted=("draft_overall_pick", "mean"),
+     UDFA_Rate=("undrafted", "mean"), 
+     Snaps=("career_offensive_snaps", "sum"), 
+     Games_Started=("career_games_started", "sum"),
+     AllPro_First=("ap_all_pro_1st_team", "sum"),
+     AllPro_Second=("ap_all_pro_2nd_team", "sum"),
+     Pro_Bowl=("pro_bowl_original_ballot", "sum")
+     )
+wr_routes = wr_plays.groupby("profile", as_index=False).agg(
+     routes=("play_id", "count"), epa_route=("expected_points_added", "mean"),
+     yprr=("rec_yards", "mean"), yac_over_exp_route=("yac_over_expected", "mean")
+     )
+wr_targets = wr_plays[wr_plays["target"]].groupby("profile", as_index=False).agg(
+     targets=("play_id", "count"), epa_target=("expected_points_added", "mean"), 
+     ypt=("rec_yards", "mean"), yac_over_exp_target=("yac_over_expected", "mean")
+     )
+
+wr_profile_perform = wr_profiles.merge(wr_routes, how="left", on="profile").merge(wr_targets, how="left", on="profile").sort_values("Avg_Pick").round(3)
+print(wr_profile_perform)
+wr_profile_perform.to_csv(f"{path}wr_profile_perform.csv")
 
 
 
