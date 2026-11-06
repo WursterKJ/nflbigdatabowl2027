@@ -16,9 +16,6 @@ wr = wr.merge(player_accol, how="left", on="nfl_id").merge(combine.drop(columns=
 wr_ids = wr["nfl_id"]
 
 '''
-# WR combine tracking data
-combine_t = pd.read_csv(f"{path}combine_tracking.csv")
-wr_combine_t = combine_t[combine_t["nfl_id"].isin(wr_ids)]
 
 # WR game tracking data
 games_t_23 = pd.read_csv(f"{path}game_tracking_2023.csv")
@@ -70,6 +67,7 @@ for pool in [wr, drafted]:
 #     print(profile_draft)
 # wr.to_csv(f"{path}wr_zscores.csv")
 
+'''
 # modeling for hook, find marginal changes in score to draft pick
 model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
 # print(model.summary())
@@ -146,3 +144,20 @@ first_cols = ["aggregation", "profile"]
 wr_profile_perform = wr_profile_perform[first_cols + [c for c in wr_pooled.columns if c not in first_cols]].round(3)
 print(wr_profile_perform.to_string(index=False))
 wr_profile_perform.to_csv(f"{path}wr_profile_perform.csv", index=False)
+'''
+
+# WR combine tracking data
+combine_t = pd.read_csv(f"{path}combine_tracking.csv")
+wr_combine_t = combine_t[combine_t["nfl_id"].isin(wr_ids)]
+
+drills = pd.Series(wr_combine_t["drill_name"])
+# print(drills.value_counts())
+
+player_t = wr_combine_t[wr_combine_t["entity_type"]=="PLAYER"]
+events = player_t.groupby("event_id").agg(nfl_id=("nfl_id", "first"), drill_name=("drill_name", "first"), attempts=("attempt", "first"))
+wr_events = events.merge(wr[["nfl_id", "display_name", "ngs_ath", "ngs_prod", "profile", "pick_adj"]], on="nfl_id", how="left")
+wr_events.to_csv(f"{path}wr_drills.csv", index=False)
+profile_events = wr_events.pivot_table(index="drill_name", values="nfl_id", columns="profile", aggfunc="nunique")
+print(profile_events)
+
+# print(wr[~wr["nfl_id"].isin(wr_events["nfl_id"])])
