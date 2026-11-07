@@ -67,12 +67,10 @@ for pool in [wr, drafted]:
 #     print(profile_draft)
 # wr.to_csv(f"{path}wr_zscores.csv")
 
-'''
 # modeling for hook, find marginal changes in score to draft pick
-model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
+# model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
 # print(model.summary())
 # print(model.t_test("z_ath - z_prod = 0"))
-
 
 
 # create outcome/performance variables for WRs
@@ -89,6 +87,7 @@ wr_plays[["rec_yards", "yac_over_expected", "expected_points_added"]] = wr_plays
 wr_plays = wr_plays.merge(wr[["nfl_id", "profile"]], on="nfl_id", how="left")
 wr_targeted = wr_plays[wr_plays["target"] == True]
 
+'''
 # first aggregation, profile level (pool all plays by profile first, then make metrics)
 wr_profile_draft = wr.groupby("profile").agg(
     Avg_Pick=("pick_adj", "mean"),
