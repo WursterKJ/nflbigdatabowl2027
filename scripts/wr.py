@@ -14,25 +14,11 @@ players = pd.read_csv(f"{path}players.csv")
 wr = players[players["nfl_position"] == "WR"]
 wr = wr.merge(player_accol, how="left", on="nfl_id").merge(combine.drop(columns="draft_year"), how="left", on="nfl_id")
 wr_ids = wr["nfl_id"]
-
-'''
-
-# WR game tracking data
-games_t_23 = pd.read_csv(f"{path}game_tracking_2023.csv")
-games_t_24 = pd.read_csv(f"{path}game_tracking_2024.csv")
-games_t_25 = pd.read_csv(f"{path}game_tracking_2025.csv")
-
-game_ids = wr_plays["game_id"].unique()
-wr_plays_t = pd.concat([track[track["game_id"].isin(game_ids) & track["nfl_id"].isin(wr_ids)]
-     for track in (games_t_23, games_t_24, games_t_25)], ignore_index=True)
-'''
      
 # wr = WR descriptive data such as measurables, combine measurements, accolades, ngs scores
 # wr_combine_t = combine tracking for each WR
 # wr_plays = regular season only play level data with game and play result information
 # wr_plays_t = all tracking frames from plays from last three regular seasons stacked only for WRs
-
-
 
 # NGS SCORES (PRODUCTION VS ATHELTIC) AND DRAFT PICK POSITION
 wr = wr.rename(columns={"ngs_athleticism_score":"ngs_ath", "ngs_college_production_score":"ngs_prod"})
@@ -157,6 +143,29 @@ events = player_t.groupby("event_id").agg(nfl_id=("nfl_id", "first"), drill_name
 wr_events = events.merge(wr[["nfl_id", "display_name", "ngs_ath", "ngs_prod", "profile", "pick_adj"]], on="nfl_id", how="left")
 wr_events.to_csv(f"{path}wr_drills.csv", index=False)
 profile_events = wr_events.pivot_table(index="drill_name", values="nfl_id", columns="profile", aggfunc="nunique")
-print(profile_events)
-
+routes = ["OUT_", "CURL", "COMEBACK", "GO", "SLANT"]
+wr_routes = wr_events[wr_events["drill_name"].str.contains("|".join(routes))]
+wr_routes["route"] = pd.NA
+for route in routes:
+    route_adj = route.replace("_", "")
+    wr_routes.loc[wr_routes["drill_name"].str.contains(route), "route"] = route_adj
+# print(wr_routes)
+print(wr_routes.groupby("route").size())
+# print(profile_events)
 # print(wr[~wr["nfl_id"].isin(wr_events["nfl_id"])])
+
+game_routes = wr_plays["route_ran"].unique()
+# ['GO' 'IN' 'CROSS' 'HITCH' 'OUT' 'FLAT' 'SLANT' 'POST' 'SCREEN' 'CORNER' 'WHEEL' 'ANGLE']
+game_route_counts = wr_plays.groupby("route_ran").size()
+# print(game_route_counts)
+
+'''
+# WR game tracking data
+games_t_23 = pd.read_csv(f"{path}game_tracking_2023.csv")
+games_t_24 = pd.read_csv(f"{path}game_tracking_2024.csv")
+games_t_25 = pd.read_csv(f"{path}game_tracking_2025.csv")
+
+game_ids = wr_plays["game_id"].unique()
+wr_plays_t = pd.concat([track[track["game_id"].isin(game_ids) & track["nfl_id"].isin(wr_ids)]
+     for track in (games_t_23, games_t_24, games_t_25)], ignore_index=True)
+'''
