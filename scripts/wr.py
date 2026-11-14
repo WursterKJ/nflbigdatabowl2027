@@ -53,12 +53,6 @@ for pool in [wr, drafted]:
 #     print(profile_draft)
 # wr.to_csv(f"{path}wr_zscores.csv")
 
-# modeling for hook, find marginal changes in score to draft pick
-# model = smf.ols("pick_log ~ z_ath + z_prod", wr).fit()
-# print(model.summary())
-# print(model.t_test("z_ath - z_prod = 0"))
-
-
 # create outcome/performance variables for WRs
 # combine performance outcomes with draft position for player profiles
 # aggregate per route/target metrics two different ways: (example for epa per route run)
@@ -165,6 +159,40 @@ wr_g_routes = wr_plays[wr_plays["route_ran"].isin(g_routes)]
 game_routes = wr_g_routes["route_ran"].unique()
 print(wr_g_routes["route_ran"].value_counts().sort_index())
 
+# x		Player horizontal position along field length in yards (0-120).
+# y	    Player vertical position across field width in yards (0-53.33).
+# s		Instantaneous player speed in yards per second (yd/s).
+# a		Instantaneous player acceleration in yards per second squared (yds / sec^2).
+# dis	Distance traveled from the previous tracking frame in yards.
+# dir	Player motion direction angle in degrees (0-360).
+
+# SLANT ROUTE TRACKING
+# MEASURING BREAK TO ACCELERATION
+
+
+c_slant_att = wr_routes[wr_routes["route"] == "SLANT"][["event_id", "nfl_id"]]
+c_slant_t = player_t.merge(c_slant_att[["event_id"]], on="event_id")
+c_slant_t["time"] = pd.to_datetime(c_slant_t["time"])
+c_slant_t.sort_values(["event_id", "time"])
+# change in direction between observations
+c_slant_t["dir_change"] = c_slant_t["dir"].diff()
+# positive direction changes (slants ran from left side, any increase in dir value is towards middle of field)
+c_slant_t["positive_change"] = c_slant_t["dir_change"] > 0
+# require 3 consecutive positive changes to indicate break
+c_slant_t["break_candidate"] = (c_slant_t["positive_change"].rolling(3).sum() == 3)
+# first observation of sustained directional change
+break_index = c_slant_t.index[c_slant_t["break_candidate"]][0]
+c_slant_t.to_csv(f"{path}slant.csv")
+print(c_slant_t)
+
+# GO ROUTE TRACKING
+# MEASURING ACCELERATION TO TOP SPEED
+
+# HITCH ROUTE TRACKING
+# MEASURING TOP SPEED TO STOP
+
+# OUT ROUTE TRACKING
+# TOP SPEED TO BREAK
 
 '''
 # WR game tracking data
