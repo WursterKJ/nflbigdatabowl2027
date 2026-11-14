@@ -139,25 +139,32 @@ drills = pd.Series(wr_combine_t["drill_name"])
 # print(drills.value_counts())
 
 player_t = wr_combine_t[wr_combine_t["entity_type"]=="PLAYER"]
-events = player_t.groupby("event_id").agg(nfl_id=("nfl_id", "first"), drill_name=("drill_name", "first"), attempts=("attempt", "first"))
+events = player_t.groupby("event_id").agg(nfl_id=("nfl_id", "first"), drill_name=("drill_name", "first"), attempts=("attempt", "first")).reset_index()
 wr_events = events.merge(wr[["nfl_id", "display_name", "ngs_ath", "ngs_prod", "profile", "pick_adj"]], on="nfl_id", how="left")
 wr_events.to_csv(f"{path}wr_drills.csv", index=False)
 profile_events = wr_events.pivot_table(index="drill_name", values="nfl_id", columns="profile", aggfunc="nunique")
-routes = ["OUT_", "CURL", "COMEBACK", "GO", "SLANT"]
+routes = ["OUT_", "CURL", "GO", "SLANT"]
 wr_routes = wr_events[wr_events["drill_name"].str.contains("|".join(routes))]
 wr_routes["route"] = pd.NA
 for route in routes:
     route_adj = route.replace("_", "")
     wr_routes.loc[wr_routes["drill_name"].str.contains(route), "route"] = route_adj
+    wr_routes["route"]
+wr_routes["route"] = wr_routes["route"].replace({"CURL": "HITCH"})
 # print(wr_routes)
-print(wr_routes.groupby("route").size())
+print(wr_routes.groupby("route").size().sort_index())
 # print(profile_events)
 # print(wr[~wr["nfl_id"].isin(wr_events["nfl_id"])])
 
-game_routes = wr_plays["route_ran"].unique()
+# game_routes = wr_plays["route_ran"].unique()
 # ['GO' 'IN' 'CROSS' 'HITCH' 'OUT' 'FLAT' 'SLANT' 'POST' 'SCREEN' 'CORNER' 'WHEEL' 'ANGLE']
-game_route_counts = wr_plays.groupby("route_ran").size()
+# game_route_counts = wr_plays.groupby("route_ran").size()
 # print(game_route_counts)
+g_routes = ["OUT", "HITCH", "GO", "SLANT"]
+wr_g_routes = wr_plays[wr_plays["route_ran"].isin(g_routes)]
+game_routes = wr_g_routes["route_ran"].unique()
+print(wr_g_routes["route_ran"].value_counts().sort_index())
+
 
 '''
 # WR game tracking data
